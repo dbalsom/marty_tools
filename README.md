@@ -1,2 +1,2 @@
-# cow_tools
+# marty_tools
 Miscellaneous tools for IBM PC emulation development
