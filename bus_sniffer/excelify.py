@@ -31,7 +31,7 @@ import csv
 import sys
 import json
 from openpyxl import Workbook
-from openpyxl.styles import Border, Side, PatternFill, Font
+from openpyxl.styles import Border, Side, PatternFill, Font, NamedStyle
 from openpyxl.utils import get_column_letter
 
 from collections import deque
@@ -479,7 +479,8 @@ def add_instructions_sheet(wb):
     
     # Fixed-width font style and hyperlink font style
     fixed_font = Font(name='Courier New')
-    hyperlink_font = Font(color='0000FF', underline='single')
+    #hyperlink_font = Font(color='0000FF', underline='single')
+    hyperlink = NamedStyle(name="hyperlink", font=Font(color="0563C1", underline="single"))
 
     # Variables for tracking cycles
     last_row_num = 0
@@ -497,8 +498,11 @@ def add_instructions_sheet(wb):
         if cell.value:
             instructions_sheet[f'A{row_num}'].value = cell.value
             instructions_sheet[f'A{row_num}'].font = fixed_font
-            instructions_sheet[f'C{row_num}'] = f'=HYPERLINK("#\'{ws.title}\'!{cell.coordinate}", "Link to {cell.coordinate}")'
-            instructions_sheet[f'C{row_num}'].font = hyperlink_font
+
+            instructions_sheet[f'C{row_num}'].hyperlink = f"#{ws.title}!A{cell.row}"
+            instructions_sheet[f'C{row_num}'].style = hyperlink
+            #instructions_sheet[f'C{row_num}'] = f'=HYPERLINK("#\'{ws.title}\'!{cell.coordinate}", "Link to {cell.coordinate}")'
+            #instructions_sheet[f'C{row_num}'].font = hyperlink_font
             
             # Calculate the number of cycles (rows between instructions)
             if last_row_num != 1:
@@ -511,7 +515,6 @@ def add_instructions_sheet(wb):
             row_num += 1
 
 def add_io_sheet(wb):
-
     print("Adding IO index...")
 
     try:
@@ -537,10 +540,13 @@ def add_io_sheet(wb):
     io_sheet['A1'] = 'ADDR'
     io_sheet['B1'] = 'OP'
     io_sheet['C1'] = 'DATA'
-    io_sheet['D1'] = 'DESC'  # Adding a 'DESC' column header
+    io_sheet['D1'] = 'LINK'  # 'LINK' column header is now D
+    io_sheet['E1'] = 'DESC'  # 'DESC' column header is now E
 
     # Initialize row_num for IO sheet
     row_num = 2
+
+    hyperlink = NamedStyle(name="hyperlink2", font=Font(color="0563C1", underline="single"))
 
     # Resolve the column headers to column numbers
     busl_col, al_col, d_col = None, None, None
@@ -572,7 +578,11 @@ def add_io_sheet(wb):
                     op = io_sheet[f'B{row_num}'].value
                     key = f"{addr}{op.lower()}"
                     desc = ports.get(key, '')  # If not found, default to an empty string
-                    io_sheet[f'D{row_num}'] = desc
+                    io_sheet[f'E{row_num}'] = desc  # 'DESC' is now column E
+
+                    link = f"#{main_sheet.title}!A{cell.row}"
+                    io_sheet[f'D{row_num}'].hyperlink = link  # 'LINK' is now column D
+                    io_sheet[f'D{row_num}'].style = hyperlink
 
                     row_num += 1
 
