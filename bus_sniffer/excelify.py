@@ -29,11 +29,13 @@
 #   input_csv output_csv
 import csv
 import sys
+import json
 from openpyxl import Workbook
-from openpyxl.styles import Border, Side, PatternFill
+from openpyxl.styles import Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
 
 from collections import deque
+
 
 PASTEL_PINK = 'FFD1DC'      # Pastel Pink
 PASTEL_ORANGE = 'FFC3A0'    # Pastel Orange
@@ -52,6 +54,7 @@ LIGHT_CYAN = 'E0FFFF'       # Light Cyan
 THISTLE = 'D8BFD8'          # Thistle
 SANDY_BROWN = 'F4A460'      # Sandy Brown
 LIGHT_GRAY = 'D3D3D3'  # Light Gray
+NORMAL_BLUE = '0000FF'
 
 FILL_COLORS = ["ADD8E6", "FFB6C1", "FFDAB9", "E0FFFF", "FFF0F5", "D8BFD8", "FAEBD7"]
 COLOR_MAP = {
@@ -452,6 +455,129 @@ def print_cols(wb):
     for cell in ws[1]:
         print(f"column name: {cell.value}")
 
+def add_instructions_sheet(wb):
+
+    print("Adding instruction index...")
+    # Assuming the first sheet is the main sheet
+    ws = wb.active
+
+    # Create 'Instructions' sheet if not exist
+    if 'Instructions' in wb.sheetnames:
+        instructions_sheet = wb['Instructions']
+    else:
+        instructions_sheet = wb.create_sheet(title='Instructions')
+
+    # Find the index of the "DISASM" column in the main sheet
+    disasm_col = None
+    for col in ws.iter_cols(1, ws.max_column):
+        if col[0].value == 'DISASM':
+            disasm_col = col
+            break
+    
+    if disasm_col is None:
+        raise Exception("DISASM column not found in the main sheet")
+    
+    # Fixed-width font style and hyperlink font style
+    fixed_font = Font(name='Courier New')
+    hyperlink_font = Font(color='0000FF', underline='single')
+
+    # Variables for tracking cycles
+    last_row_num = 0
+    row_num = 2  # Start from the second row
+    first_cycle = True
+
+    # Adding headers
+    instructions_sheet['A1'] = 'DISASM'
+    instructions_sheet['B1'] = 'CYCLES'  # Swapped column
+    instructions_sheet['C1'] = 'LINK'    # Swapped column
+
+    # Iterate through cells in "DISASM" column in the main sheet starting from row 2
+    for index, cell in enumerate(disasm_col[1:], start=2):
+        # If cell has a value, copy it to "Instructions" sheet and create a link
+        if cell.value:
+            instructions_sheet[f'A{row_num}'].value = cell.value
+            instructions_sheet[f'A{row_num}'].font = fixed_font
+            instructions_sheet[f'C{row_num}'] = f'=HYPERLINK("#\'{ws.title}\'!{cell.coordinate}", "Link to {cell.coordinate}")'
+            instructions_sheet[f'C{row_num}'].font = hyperlink_font
+            
+            # Calculate the number of cycles (rows between instructions)
+            if last_row_num != 1:
+                cycles = index - last_row_num
+                if first_cycle:
+                    first_cycle = False
+                else:
+                    instructions_sheet[f'B{row_num - 1}'] = cycles
+            last_row_num = index
+            row_num += 1
+
+def add_io_sheet(wb):
+
+    print("Adding IO index...")
+
+    try:
+        # Try to open and load the ports.json file
+        with open('ports.json', 'r') as file:
+            ports = json.load(file)
+    except FileNotFoundError:
+        print("Error: The ports.json file could not be found.")
+        ports = {}  # Set ports to an empty dictionary
+    except json.JSONDecodeError:
+        print("Error: Unable to decode JSON data in ports.json file.")
+        ports = {}  # Set ports to an empty dictionary
+
+    main_sheet = wb.active
+
+    # Create 'IO' sheet if not exist
+    if 'IO' in wb.sheetnames:
+        io_sheet = wb['IO']
+    else:
+        io_sheet = wb.create_sheet(title='IO')
+
+    # Adding headers
+    io_sheet['A1'] = 'ADDR'
+    io_sheet['B1'] = 'OP'
+    io_sheet['C1'] = 'DATA'
+    io_sheet['D1'] = 'DESC'  # Adding a 'DESC' column header
+
+    # Initialize row_num for IO sheet
+    row_num = 2
+
+    # Resolve the column headers to column numbers
+    busl_col, al_col, d_col = None, None, None
+    for i, col in enumerate(main_sheet.iter_cols(1, main_sheet.max_column)):
+        if col[0].value == 'BUSL':
+            busl_col = i + 1
+        elif col[0].value == 'AL':
+            al_col = i + 1
+        elif col[0].value == 'D':
+            d_col = i + 1
+
+    if not busl_col or not al_col or not d_col:
+        raise Exception("Required columns not found in the main sheet")            
+
+    # Iterate through cells in 'D' column in the main sheet starting from row 2
+    for row in main_sheet.iter_rows(min_row=2, min_col=d_col, max_col=d_col, max_row=main_sheet.max_row):
+        for cell in row:
+            if cell.value:  # If cell in 'D' column has a value
+                busl_value = main_sheet.cell(row=cell.row, column=busl_col).value  # BUSL value in the same row
+                al_value = main_sheet.cell(row=cell.row, column=al_col).value  # AL value in the same row
+                
+                if busl_value == 'IOR' or busl_value == 'IOW':
+                    io_sheet[f'A{row_num}'] = al_value
+                    io_sheet[f'B{row_num}'] = 'R' if busl_value == 'IOR' else 'W'
+                    io_sheet[f'C{row_num}'] = cell.value
+
+                    # Construct the key and look up in the ports.json
+                    addr = al_value[-4:]
+                    op = io_sheet[f'B{row_num}'].value
+                    key = f"{addr}{op.lower()}"
+                    desc = ports.get(key, '')  # If not found, default to an empty string
+                    io_sheet[f'D{row_num}'] = desc
+
+                    row_num += 1
+
+    # Set the auto_filter to include all data in the IO sheet.
+    io_sheet.auto_filter.ref = io_sheet.dimensions
 
 def main():
 
@@ -487,6 +613,9 @@ def main():
     
     # Freeze the top row
     wb.active.freeze_panes = 'A2'
+
+    add_instructions_sheet(wb)
+    add_io_sheet(wb)
 
     print("\nSaving xlsx...")
     wb.save(output_xlsx)
