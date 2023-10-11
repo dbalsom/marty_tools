@@ -1,0 +1,55 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "copyPythonFilesToSigrokCli",
+            "type": "shell",
+            "command": "cmd",
+            "args": [
+                "/c",
+                "copy",
+                "\"${workspaceFolder}\\sigrok_decoders\\i8088\\*.py\"",
+                "\"T:\\sigrok-cli\\share\\libsigrokdecode\\decoders\\i8088\\\""
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\cmd.exe"
+                }
+            }
+        },
+        {
+            "label": "copyPythonFilesToPulseView",
+            "type": "shell",
+            "command": "cmd",
+            "args": [
+                "/c",
+                "copy",
+                "\"${workspaceFolder}\\sigrok_decoders\\i8088\\*.py\"",
+                "\"T:\\PulseView\\share\\libsigrokdecode\\decoders\\i8088\\\""
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\cmd.exe"
+                }
+            }
+        }        
+    ]
+}
