@@ -23,53 +23,89 @@ from common.srdhelper import bitpack
 from collections import deque
 from .disasm import Disassembler
 
-'''
-OUTPUT_PYTHON format:
-
-Packet:
-[<ptype>, <pdata>]
-
-<ptype>, <pdata>
- - 'ITEM', [<item>, <itembitsize>]
- - 'WORD', [<word>, <wordbitsize>, <worditemcount>]
-
-<item>:
- - A single item (a number). It can be of arbitrary size. The max. number
-   of bits in this item is specified in <itembitsize>.
-
-<itembitsize>:
- - The size of an item (in bits). For a 4-bit parallel bus this is 4,
-   for a 16-bit parallel bus this is 16, and so on.
-
-<word>:
- - A single word (a number). It can be of arbitrary size. The max. number
-   of bits in this word is specified in <wordbitsize>. The (exact) number
-   of items in this word is specified in <worditemcount>.
-
-<wordbitsize>:
- - The size of a word (in bits). For a 2-item word with 8-bit items
-   <wordbitsize> is 16, for a 3-item word with 4-bit items <wordbitsize>
-   is 12, and so on.
-
-<worditemcount>:
- - The size of a word (in number of items). For a 4-item word (no matter
-   how many bits each item consists of) <worditemcount> is 4, for a 7-item
-   word <worditemcount> is 7, and so on.
-'''
-
 class ChannelError(Exception):
     pass
 
-ADDRESS_LINES = ['ad0', 'ad1', 'ad2', 'ad3', 'ad4', 'ad5', 'ad6', 'ad7', 'a8', 'a9', 'a10', 'a11', 'a12', 'a13', 'a14', 'a15', 'a16', 'a17', 'a18', 'a19']
+ADDRESS_LINES = [
+    "ad0",
+    "ad1",
+    "ad2",
+    "ad3",
+    "ad4",
+    "ad5",
+    "ad6",
+    "ad7",
+    "a8",
+    "a9",
+    "a10",
+    "a11",
+    "a12",
+    "a13",
+    "a14",
+    "a15",
+    "a16",
+    "a17",
+    "a18",
+    "a19",
+]
 
 ADDR_LEN = 20
 PINS_LEN = 27
 
 class Pin:
-    AD0, AD1, AD2, AD3, AD4, AD5, AD6, AD7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, S0, S1, S2, QS0, QS1, RDY, CLK = range(PINS_LEN)
+    (
+        AD0,
+        AD1,
+        AD2,
+        AD3,
+        AD4,
+        AD5,
+        AD6,
+        AD7,
+        A8,
+        A9,
+        A10,
+        A11,
+        A12,
+        A13,
+        A14,
+        A15,
+        A16,
+        A17,
+        A18,
+        A19,
+        S0,
+        S1,
+        S2,
+        QS0,
+        QS1,
+        RDY,
+        CLK,
+    ) = range(PINS_LEN)
 
 class Addr:
-    AD0, AD1, AD2, AD3, AD4, AD5, AD6, AD7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19 = range(ADDR_LEN)
+    (
+        AD0,
+        AD1,
+        AD2,
+        AD3,
+        AD4,
+        AD5,
+        AD6,
+        AD7,
+        A8,
+        A9,
+        A10,
+        A11,
+        A12,
+        A13,
+        A14,
+        A15,
+        A16,
+        A17,
+        A18,
+        A19,
+    ) = range(ADDR_LEN)
 
 class Status:
     S0, S1, S2 = 20, 21, 22
@@ -78,13 +114,54 @@ class TState:
     TI, T1, T2, T3, TW, T4 = range(6)
 
 class Annot:
-    ALE,AddrLatch,BusStatus,BusStatusL,QsF,QsS,QsE,TI,T1,T2,T3,TW,T4,D,F,Mm,Piq,Ib,Dbg,Err = range(20)
+    (
+        ALE,
+        AddrLatch,
+        BusStatus,
+        BusStatusL,
+        BusSegment,
+        QsF,
+        QsS,
+        QsE,
+        TI,
+        T1,
+        T2,
+        T3,
+        TW,
+        T4,
+        INTA,
+        IOR,
+        IOW,
+        HALT,
+        CODE,
+        MEMR,
+        MEMW,
+        PASV,
+        ES,
+        SS,
+        CS,
+        DS,
+        D,
+        F,
+        Mm,
+        Piq,
+        Ib,
+        Dbg,
+        Err,
+    ) = range(33)
 
 class BusStatus:
     INTA,IOR,IOW,HALT,CODE,MEMR,MEMW,PASV = range(8)
 
 class QueueOp:
     Idle, First, Empty, Subs = range(4)
+
+QUEUE_STATES = [
+    '.',
+    'F',
+    'E',
+    'S',
+]
 
 QUEUE_ANNOTS = [
     Annot.QsF,
@@ -104,20 +181,15 @@ BUS_STATES = [
     'PASV',
 ]
 
-QUEUE_STATES = [
-    '.',
-    'F',
-    'E',
-    'S',
-]
-
-T_ANNOTS = [
-    Annot.TI, 
-    Annot.T1, 
-    Annot.T2, 
-    Annot.T3, 
-    Annot.TW, 
-    Annot.T4
+BUS_ANNOTS = [
+    Annot.INTA,
+    Annot.IOR,
+    Annot.IOW,
+    Annot.HALT,
+    Annot.CODE,
+    Annot.MEMR,
+    Annot.MEMW,
+    Annot.PASV,
 ]
 
 T_STATES = [
@@ -127,6 +199,31 @@ T_STATES = [
     'T3',
     'Tw',
     'T4',
+]
+
+# We duplicate the T1 annotation index so that only TI and Tw t-states have 
+# different colors.  The disassembly is otherwise a bit tutti-frutti.
+T_ANNOTS = [
+    Annot.TI, 
+    Annot.T1, 
+    Annot.T1, 
+    Annot.T1, 
+    Annot.TW, 
+    Annot.T1
+]
+
+SEG_STATES = [
+    'ES',
+    'SS',
+    'CS',
+    'DS',
+]
+
+SEG_ANNOTS = [
+    Annot.ES,
+    Annot.SS,
+    Annot.CS,
+    Annot.DS
 ]
 
 def reduce_bus(bus):
@@ -193,6 +290,7 @@ class Decoder(srd.Decoder):
         ('address-latch', 'Address Latch'),
         ('bus-status', 'Bus Status'),
         ('bus-status-latch', 'Bus Status Latch'),
+        ('bus-segment', 'Bus Segment'),
         ('qs-f', 'Queue Status: F'),
         ('qs-e', 'Queue Status: S'),
         ('qs-s', 'Queue Status: E'),
@@ -202,6 +300,18 @@ class Decoder(srd.Decoder):
         ('t3', 'T3'),
         ('tw', 'Tw'),
         ('t4', 'T4'),
+        ('inta', 'INTA'),
+        ('ior', 'IOR'),
+        ('iow', 'IOW'),
+        ('halt', 'HALT'),
+        ('code', 'CODE'),
+        ('memr', 'MEMR'),
+        ('memw', 'MEMW'),
+        ('pasv', 'PASV'),
+        ('es', "ES"),
+        ('ss', "SS"),
+        ('cs', "CS"),
+        ('ds', "DS"),
         ('d', 'Data Bus'),
         ('cf', 'Code Fetch'),
         ('mm', 'Mnemonic'),
@@ -211,18 +321,68 @@ class Decoder(srd.Decoder):
         ('err', 'Error Msg'),
     )
     annotation_rows = (
-        ('ALE', 'Address Latch Enable', (Annot.ALE,)),
-        ('AL', 'Address Latch', (Annot.AddrLatch,)),
-        ('BUS', 'Bus Status', (Annot.BusStatus,)),
-        ('BUSL', 'Bus Status Latch', (Annot.BusStatusL,)),
-        ('QOP', 'Queue Status', (Annot.QsF, Annot.QsS, Annot.QsE,)),
-        ('TCYC', 'CPU T-cycle', (Annot.TI, Annot.T1, Annot.T2, Annot.T3, Annot.TW, Annot.T4,)),
-        ('DATA', 'Data Bus', (Annot.D,)),
-        ('FETCH', 'Code Fetch', (Annot.F,)),
-        ('PIQ', 'Instruction Queue', (Annot.Piq,)),
-        ('IB', 'Instruction Bytes', (Annot.Ib,)),
-        ('INST', 'Instruction', (Annot.Mm,)),
-        ('DBG', 'Debug', (Annot.Dbg,Annot.Err,)),
+        ("ALE", "Address Latch Enable", (Annot.ALE,)),
+        ("AL", "Address Latch", (Annot.AddrLatch,)),
+        (
+            "BUS",
+            "Bus Status",
+            (
+                Annot.BusStatus,
+                Annot.INTA,
+                Annot.IOR,
+                Annot.IOW,
+                Annot.HALT,
+                Annot.CODE,
+                Annot.MEMR,
+                Annot.MEMW,
+                Annot.PASV,
+            ),
+        ),
+        (
+            "SEG", 
+            "Bus Segment", 
+            (
+                Annot.BusSegment,
+                Annot.ES,
+                Annot.SS,
+                Annot.CS,
+                Annot.DS
+            ),
+        ),
+        (
+            "QOP",
+            "Queue Status",
+            (
+                Annot.QsF,
+                Annot.QsS,
+                Annot.QsE,
+            ),
+        ),
+        (
+            "TCYC",
+            "CPU T-cycle",
+            (
+                Annot.TI,
+                Annot.T1,
+                Annot.T2,
+                Annot.T3,
+                Annot.TW,
+                Annot.T4,
+            ),
+        ),
+        ("DATA", "Data Bus", (Annot.D,)),
+        ("FETCH", "Code Fetch", (Annot.F,)),
+        ("PIQ", "Instruction Queue", (Annot.Piq,)),
+        ("IB", "Instruction Bytes", (Annot.Ib,)),
+        ("INST", "Instruction", (Annot.Mm,)),
+        (
+            "DBG",
+            "Debug",
+            (
+                Annot.Dbg,
+                Annot.Err,
+            ),
+        ),
     )
 
     def __init__(self):
@@ -257,6 +417,10 @@ class Decoder(srd.Decoder):
         self.bus_status_ss = TrackedValue()      # Bus cycle sample number
         self.bus_status_latch = TrackedValue()   # Bus Status Latch
         
+        # Segment status    
+        self.seg_status = TrackedValue()         # Segment status - default CS
+        self.have_seg = False
+
         self.t_state = TState.TI    # CPU T-state
         self.prev_queue_ss = 0
         self.queue_status = TrackedValue(0)
@@ -268,7 +432,12 @@ class Decoder(srd.Decoder):
         self.opcode = TrackedValue(0)
         self.instr_ss = TrackedValue()
         self.instr = deque()
+        self.instr_reads = deque()
+        self.instr_writes = deque()
         self.mnemonic = TrackedValue('')
+
+        self.inta = 0
+        self.iv = 0
 
     def putpb(self, data):
         self.put(self.ss_item, self.es_item, self.out_python, data)
@@ -326,7 +495,7 @@ class Decoder(srd.Decoder):
                     self.bus_status_ss.cur,
                     self.samplenum,
                     self.out_ann,
-                    [Annot.BusStatus, [BUS_STATES[self.bus_status.cur]]],
+                    [BUS_ANNOTS[self.bus_status.cur], [BUS_STATES[self.bus_status.cur]]],
                 )
     
             # Decode the bus status pins to an integer.
@@ -334,13 +503,40 @@ class Decoder(srd.Decoder):
             self.bus_status_ss.update(self.samplenum)
             
             if self.bus_status.prev is not None:
-                if self.bus_status.prev == 7 and self.bus_status.cur != 7:
+                if self.bus_status.prev == BusStatus.PASV and self.bus_status.cur != BusStatus.PASV:
                     # New bus cycle is beginning, indicating the ALE signal should go high.
                     self.ale = True
                     self.al_ss.update(self.samplenum)
                     # Latch the bus status. The instantaneous bus status goes LOW on T3, but
                     # we want to remember it to detect type of reads and writes.
                     self.bus_status_latch.update(self.bus_status.cur)
+
+                    if self.bus_status_latch.cur == BusStatus.INTA:
+                        # Interrupt occurred. Keep track of INTA bus cycle number.
+                        # There are two INTA cycles, the IV is read on the second.
+                        # This is for historical reasons to maintain PIC compatibility with the 8080.
+                        if self.inta == 0:
+                            # Beginning first INTA. End current instruction.
+                            self.end_instruction()
+                            self.inta = 1
+                            self.debug_annot("inta1")
+                        elif self.inta == 1:
+                            self.inta = 2
+                            self.debug_annot("inta2")
+                        else:
+                            self.error_annot("inta_of")                 
+
+    def decode_seg(self, pins):
+        # Decode segment status pins S3-S4 to SEG status. We just save this value without
+        # calculating annotation range - we will emit at the same time as the address
+        # latch annotation.
+
+        # S3 = A16
+        # S4 = A17
+        self.seg_status.update(pins[Pin.A16] + (pins[Pin.A17] * 2))
+
+        # Set a flag as we don't need to calculate this more than once per m-cycle
+        self.have_seg = True
 
     def display_queue(self):
         if len(self.queue) > 0:
@@ -393,48 +589,75 @@ class Decoder(srd.Decoder):
             self.instr.append(byte)
 
     def decode_queue(self, pins):
-        if self.queue_status.update(reduce_bus(pins[Pin.QS0:Pin.QS1+1])).changed():
-            if self.queue_status.prev != 0:
-                self.cycle_annot(
-                    QUEUE_ANNOTS[self.queue_status.prev],
-                    QUEUE_STATES[self.queue_status.prev]    
-                )
 
-            if self.queue_status.prev == QueueOp.Empty:
-                self.queue.clear()
-                self.debug_annot("q_e")
-                self.display_queue()
+        self.queue_status.update(reduce_bus(pins[Pin.QS0:Pin.QS1+1]))
+        
+        if self.queue_status.prev != 0:
+            self.cycle_annot(
+                QUEUE_ANNOTS[self.queue_status.prev],
+                QUEUE_STATES[self.queue_status.prev]    
+            )
 
+        if self.queue_status.prev == QueueOp.Empty:
+            self.queue.clear()
+            self.debug_annot("q_e")
+            self.display_queue()
+
+        if self.queue_status.prev == QueueOp.First or self.queue_status.prev == QueueOp.Subs:
             try:
-                if self.queue_status.cur == QueueOp.First:
-                    # Update disassembly and clear instruction deque
-                    self.instr_ss.update(self.samplenum)
-                    self.opcode.update(self.instr[0])
-                    try:
-                        self.mnemonic.update(self.disasm.disassemble(list(self.instr)))
-                    except:
-                        self.mnemonic.update("inval")
-                        self.error_annot("e:{}".format(e))
-                    self.put(
-                        self.instr_ss.prev,
-                        self.cycle_sample.cur,
-                        self.out_ann,
-                        [Annot.Mm, ["{:02X}:{}".format(self.opcode.cur, self.mnemonic.cur)]],
-                    )
-                    self.instr.clear()
-            except Exception as e:
-                self.error_annot("e: {}".format(e))
+                qb = self.queue_pop()
+                self.opcode.update(qb)
+                self.instr_push(qb)
+                self.display_queue()
+                self.display_instr()
+                #self.debug_annot("q_rd:{:02X}".format(qb))
+            except:
+                self.error_annot("q_err_uf")
+                return
 
-            if self.queue_status.prev == QueueOp.First or self.queue_status.prev == QueueOp.Subs:
-                try:
-                    qb = self.queue_pop()
-                    self.opcode.update(qb)
-                    self.instr_push(qb)
-                    self.display_queue()
-                    self.display_instr()
-                    self.debug_annot("q_rd:{:02X}".format(qb))
-                except:
-                    self.error_annot("q_err_uf")
+        try:
+            if self.queue_status.cur == QueueOp.First:
+                # Update disassembly and clear instruction deque
+                self.end_instruction()
+                self.inta = 0
+            
+        except Exception as e:
+            self.error_annot("e: {}".format(e))
+
+    def end_instruction(self):
+        # Update disassembly and clear instruction deque
+        self.instr_ss.update(self.samplenum)
+
+        if len(self.instr) > 0:
+            self.opcode.update(self.instr[0])
+        try:
+            self.mnemonic.update(self.disasm.disassemble(list(self.instr)))
+        except:
+            self.mnemonic.update("inval")
+            self.error_annot("e:{}".format(e))
+
+        if self.inta == 0:
+            self.put(
+                self.instr_ss.prev,
+                self.cycle_sample.cur,
+                self.out_ann,
+                [Annot.Mm, ["{:02X}:{}".format(self.opcode.cur, self.mnemonic.cur)]],
+            )
+        else:
+            self.put(
+                self.instr_ss.prev,
+                self.cycle_sample.cur,
+                self.out_ann,
+                [Annot.Mm, ["INT:{:02X}".format(self.iv)]],
+            )
+
+        self.inta = 0
+        self.reset_instruction()
+
+    def reset_instruction(self):
+        self.instr.clear()
+        self.instr_reads.clear()
+        self.instr_writes.clear()
 
     def advance_t_state(self, pins):
         # Check if we should transition to T1.
@@ -451,10 +674,15 @@ class Decoder(srd.Decoder):
                 if pins[Pin.RDY] == 1:
                     self.data_valid = True
             elif self.t_state == TState.T3:
-                if pins[Pin.RDY] == 1:
-                    self.t_state = TState.T4
-                else:
+                if self.last_pins[Pin.RDY] == 0:
+                    if pins[Pin.RDY] == 1:
+                        self.data_valid = True
                     self.t_state = TState.TW
+                else:
+                    if pins[Pin.RDY] == 1:
+                        self.t_state = TState.T4
+                    else:
+                        self.t_state = TState.TW
             elif self.t_state == TState.TW:
                 if self.last_pins[Pin.RDY] == 0:
                     if pins[Pin.RDY] == 1:
@@ -464,6 +692,12 @@ class Decoder(srd.Decoder):
             elif self.t_state == TState.T4:
                 self.t_state = TState.TI
 
+    def seg_valid(self):
+        if self.bus_status_latch.prev in [BusStatus.CODE, BusStatus.MEMR, BusStatus.MEMW]:
+            return True
+        else:
+            return False
+
     def set_address_latch(self, pins):
         if self.ale:
             #self.debug_annot(Annot.ALE, "ALE")
@@ -472,12 +706,24 @@ class Decoder(srd.Decoder):
                 # Decode entire address bus and save sample 
                 self.al_annotation.update('%05X' % reduce_bus(pins[Addr.AD0:Addr.A19+1]))
 
+                # Output address latch annotation
                 self.put(
                     self.al_ss.prev, 
                     self.samplenum, 
                     self.out_ann, 
                     [Annot.AddrLatch, [self.al_annotation.prev]]
                 )
+
+                # Output segment status annotation
+                if self.seg_status.prev is not None and self.seg_valid():
+                    #self.debug_annot(SEG_STATES[self.seg_status.prev])
+                    self.put(
+                        self.al_ss.prev, 
+                        self.samplenum, 
+                        self.out_ann, 
+                        [SEG_ANNOTS[self.seg_status.prev], [SEG_STATES[self.seg_status.prev]]]
+                    )
+                self.have_seg = False
 
     def decode_data(self, pins):
         self.data_bus = reduce_bus(pins[Pin.AD0:Pin.AD7+1])
@@ -491,8 +737,6 @@ class Decoder(srd.Decoder):
             self.error_annot('q_err_of')
 
         self.display_queue()
-        #inst = self.disasm.disassemble([self.data_bus])
-        #self.cycle_annot(Annot.Mm, inst)
 
     def decode(self):
         while True:
@@ -503,6 +747,9 @@ class Decoder(srd.Decoder):
 
             self.decode_status(pins)
 
+            if not self.ale and not self.have_seg:
+                self.decode_seg(pins)
+
             self.cycle_annot(T_ANNOTS[self.t_state], T_STATES[self.t_state])
 
             if self.data_valid:
@@ -510,6 +757,10 @@ class Decoder(srd.Decoder):
                 if self.bus_status_latch.cur == BusStatus.CODE:
                     # This was a code fetch. Process it.
                     self.fetch()
+
+                # Save the IV during INTA cycles.
+                if self.bus_status_latch.cur == BusStatus.INTA and self.inta == 2:
+                    self.iv = self.data_bus
 
                 self.data_valid = False
 
