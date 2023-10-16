@@ -13,27 +13,35 @@ class ModRM:
         }
 
     def __str__(self):
-        mod_str = f"mod: {self.mod}"
-        reg_str = f"reg/opcode: {self.reg}"
-        rm_str  = f"r/m: {self.rm}"
+        mod_str = "mod: {}".format(self.mod)
+        reg_str = "reg/opcode: {}".format(self.reg)
+        rm_str  = "r/m: {}".format(self.rm)
 
-        return f"{mod_str}, {reg_str}, {rm_str}"
+        return "{}, {}, {}".format(mod_str, reg_str, rm_str)
 
 class Emulator:
     def __init__(self):
         self.opcode = 0
 
         self.cs_is_valid = False
-        self.cs = 0
+        self._cs = 0
         self.ip = 0
 
-    def execute(self, bytes):
+    def execute(self, bytes, reads):
+        '''
+        Executes the given list of 'bytes' as an instruction, utilizing the list of 
+        bytes 'reads' as memory read operands, if required.
+
+        Returns: boolean representing whether the queue should be adjusted on return.
+        '''
         if len(bytes) == 0:
-            return
+            return False
         
         opcode = bytes[0]
-
-        if opcode == 0x9A or opcode == 0xEA:
+        if opcode == 0x0E:
+            # PUSH CS - no flow control, but exposes CS
+            return False
+        elif opcode == 0x9A or opcode == 0xEA:
             # CALLF / JMPF
             self.cs_is_valid = False
 
@@ -41,20 +49,34 @@ class Emulator:
                 raise ValueError("{:02X} too short".format(opcode))
             
             # Read CS from immediate.
-            self.cs = bytes[3] | (bytes[4] << 8)
+            self._cs = bytes[3] | (bytes[4] << 8)
             self.cs_is_valid = True
-            
-        if opcode in [0xCC, 0xCD, 0xCE]:
+            return True
+        elif opcode in [0xCC, 0xCD, 0xCE]:
             # INT3, INT, INTO
             self.cs_is_valid = False
-        if opcode == 0xCF:
-
+            if len(reads) < 4:
+                raise ValueError("int ivr failure")
+            
+            self._cs = reads[2] | (reads[3] << 8)
+            self.cs_is_valid = True
+            return True
+        elif opcode == 0xCF:
+            
             self.cs_is_valid = False
-        if opcode == 0xEA:
+            # IRET
+            if len(reads) < 6:
+                raise ValueError("iret pop failure")
+
+            self._cs = reads[2] | (reads[3] << 8)
+            self.cs_is_valid = True
+            return True
+        elif opcode == 0xEA:
             # JMPF
             self.cs_is_valid = False
+            return True
         
-        if opcode == 0xFF:
+        elif opcode == 0xFF:
             # Group opcode. Need to parse modrm.
             if len(bytes) < 2:
                 raise ValueError("group opcode with no modrm")
@@ -65,10 +87,26 @@ class Emulator:
             if op_ext == 3 or op_ext == 5:
                 # CALLF or JMPF
                 self.cs_is_valid = False
+                return True
 
-        if opcode in [0xC8, 0xC9, 0xCA, 0xCB]:
+        elif opcode in [0xC8, 0xC9, 0xCA, 0xCB]:
             # RETF of some sort
             self.cs_is_valid = False
+            return True
+
+        return False
+    
+    def interrupt(self, _iv, reads):
+
+        if len(reads) < 4:
+            raise ValueError("int with no isr address")
+
+        self._cs = reads[2] | (reads[3] << 8)
+        self.cs_is_valid = True
 
     def cs(self):
-        return (self.cs_is_valid, self.cs)
+        if self.cs_is_valid:
+            return self._cs
+        else:
+            return None
+        

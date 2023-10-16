@@ -18,11 +18,7 @@
 ##
 
 '''
-This protocol decoder can decode the CPU signals produced by the Intel
-8088 CPU in Maximum Mode paired with an Intel 8288 Bus controller.
-
-To properly set the address latch, an ALE signal must be provided.
-
+This protocol decoder can decode the CPU signals produced by the Intel 8088 CPU in Maximum Mode.
 '''
 
 from .pd import Decoder

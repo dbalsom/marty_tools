@@ -22,9 +22,21 @@ from functools import reduce
 from common.srdhelper import bitpack
 from collections import deque
 from .disasm import Disassembler
+from .emulator import Emulator
 
 class ChannelError(Exception):
     pass
+
+PREFIXES = [
+    0x26,
+    0x2E,
+    0x36,
+    0x3E,
+    0xF0,
+    0xF1,
+    0xF2,
+    0xF3,
+]
 
 ADDRESS_LINES = [
     "ad0",
@@ -144,11 +156,12 @@ class Annot:
         D,
         F,
         Mm,
+        CsIp,
         Piq,
         Ib,
         Dbg,
         Err,
-    ) = range(33)
+    ) = range(34)
 
 class BusStatus:
     INTA,IOR,IOW,HALT,CODE,MEMR,MEMW,PASV = range(8)
@@ -225,6 +238,9 @@ SEG_ANNOTS = [
     Annot.CS,
     Annot.DS
 ]
+
+class Segment:
+    ES, SS, CS, DS = range(4)
 
 def reduce_bus(bus):
     if 0xFF in bus:
@@ -315,6 +331,7 @@ class Decoder(srd.Decoder):
         ('d', 'Data Bus'),
         ('cf', 'Code Fetch'),
         ('mm', 'Mnemonic'),
+        ('csip', 'CsIp'),
         ('piq', 'Processor Instruction Queue'),
         ('ib', 'Instruction Bytes'),
         ('dbg', 'Debug Msg'),
@@ -375,6 +392,7 @@ class Decoder(srd.Decoder):
         ("PIQ", "Instruction Queue", (Annot.Piq,)),
         ("IB", "Instruction Bytes", (Annot.Ib,)),
         ("INST", "Instruction", (Annot.Mm,)),
+        ("CSIP", "CS:IP", (Annot.CsIp,)),
         (
             "DBG",
             "Debug",
@@ -389,6 +407,7 @@ class Decoder(srd.Decoder):
         self.reset()
 
         self.disasm = Disassembler()
+        self.emu = Emulator()
 
     def reset(self):
         self.items = []
@@ -432,12 +451,15 @@ class Decoder(srd.Decoder):
         self.opcode = TrackedValue(0)
         self.instr_ss = TrackedValue()
         self.instr = deque()
-        self.instr_reads = deque()
-        self.instr_writes = deque()
+        self.instr_reads = []
+        self.instr_writes = []
         self.mnemonic = TrackedValue('')
 
         self.inta = 0
         self.iv = 0
+        self.prefix_ct = 0
+        self.ip = None
+        self.adjust_ip = TrackedValue(False)
 
     def putpb(self, data):
         self.put(self.ss_item, self.es_item, self.out_python, data)
@@ -480,7 +502,6 @@ class Decoder(srd.Decoder):
         )
 
     def decode_status(self, pins):
-        
         # Decode bus status pins S0-S2 to BUS status.
         if (
             self.last_pins[Status.S0] != pins[Status.S0]
@@ -538,9 +559,14 @@ class Decoder(srd.Decoder):
         # Set a flag as we don't need to calculate this more than once per m-cycle
         self.have_seg = True
 
+    def queue_string(self):
+        #return "{}".format(self.queue)
+        return ''.join(format(byte, '02X') for (_, byte) in self.queue)
+        
+    
     def display_queue(self):
         if len(self.queue) > 0:
-            hex_string = ''.join(format(byte, '02X') for byte in self.queue)
+            hex_string = self.queue_string()
             self.put(
                 self.cycle_sample.prev, 
                 self.samplenum, 
@@ -556,7 +582,7 @@ class Decoder(srd.Decoder):
             )
 
     def instr_string(self):
-        return ''.join(format(byte, '02X') for byte in self.instr)
+        return ''.join(format(byte, '02X') for (_, byte) in self.instr)
 
     def display_instr(self):
         if len(self.instr) > 0:
@@ -575,21 +601,26 @@ class Decoder(srd.Decoder):
                 [Annot.Ib, ['-']],
             )            
 
-    def queue_push(self, byte):
-        if len(self.queue) > 3:
-            raise IndexError("This is a custom error message")
+    def calc_ip(self, addr, cs):
+        if addr is not None and cs is not None:
+            return addr - (cs << 4)
         else:
-            self.queue.append(byte)
+            return None
+
+    def queue_push(self, ip, byte):
+        if len(self.queue) > 3:
+            raise IndexError("queue overflow")
+        else:
+            self.queue.append((ip, byte))
 
     def queue_pop(self):
         return self.queue.popleft()
 
-    def instr_push(self, byte):
+    def instr_push(self, ip, byte):
         if len(self.instr) < 8:
-            self.instr.append(byte)
+            self.instr.append((ip, byte))
 
     def decode_queue(self, pins):
-
         self.queue_status.update(reduce_bus(pins[Pin.QS0:Pin.QS1+1]))
         
         if self.queue_status.prev != 0:
@@ -603,47 +634,98 @@ class Decoder(srd.Decoder):
             self.debug_annot("q_e")
             self.display_queue()
 
+        try:
+            if self.queue_status.cur == QueueOp.First:
+                # Update disassembly and clear instruction deque
+                self.end_instruction()
+                self.inta = 0
+        except Exception as e:
+            self.error_annot("e: {}".format(e))
+
         if self.queue_status.prev == QueueOp.First or self.queue_status.prev == QueueOp.Subs:
             try:
-                qb = self.queue_pop()
+                pc, qb = self.queue_pop()
+                
+                if self.queue_status.prev == QueueOp.First:
+                    if qb in PREFIXES:
+                        self.prefix_ct += 1                    
+                    self.ip = pc
+
+                #self.debug_annot("qpop:{:02}".format(qb))
                 self.opcode.update(qb)
-                self.instr_push(qb)
+                self.instr_push(pc, qb)
                 self.display_queue()
                 self.display_instr()
                 #self.debug_annot("q_rd:{:02X}".format(qb))
             except:
                 self.error_annot("q_err_uf")
                 return
-
-        try:
-            if self.queue_status.cur == QueueOp.First:
-                # Update disassembly and clear instruction deque
-                self.end_instruction()
-                self.inta = 0
             
-        except Exception as e:
-            self.error_annot("e: {}".format(e))
+
+    def adjust_ip_inst(self):
+        '''
+        Adjust the value of self.ip after a FAR flow control operation.
+        '''            
+        if len(self.instr) > 1:
+            self.ip = self.instr[1][0] - 1
+        elif len(self.queue) > 0:
+            self.ip = self.queue[0][0] - 1
+
+    def repair_ip(self):
+        if len(self.instr) > 1:
+            self.ip = self.instr[1][0] - 1
+        elif len(self.queue) > 0:
+            self.ip = self.queue[0][0] - 1
 
     def end_instruction(self):
         # Update disassembly and clear instruction deque
         self.instr_ss.update(self.samplenum)
 
+        bytes = [byte[1] for byte in self.instr]
+
         if len(self.instr) > 0:
-            self.opcode.update(self.instr[0])
+            self.opcode.update(self.instr[0][1])
         try:
-            self.mnemonic.update(self.disasm.disassemble(list(self.instr)))
-        except:
+            self.mnemonic.update(self.disasm.disassemble(bytes))
+        except Exception as e:
             self.mnemonic.update("inval")
             self.error_annot("e:{}".format(e))
 
+        cs = self.emu.cs()
+
         if self.inta == 0:
+            # Executing normal instruction.
+            self.adjust_ip.update(self.emu.execute(bytes, self.instr_reads));
+
             self.put(
                 self.instr_ss.prev,
                 self.cycle_sample.cur,
                 self.out_ann,
                 [Annot.Mm, ["{:02X}:{}".format(self.opcode.cur, self.mnemonic.cur)]],
             )
+
+            try:
+                if self.adjust_ip.prev == True:                
+                    self.adjust_ip_inst()
+                    
+                # We adjust IP by the number of prefixes fetched, since prefixes count as part 
+                # of the previous instruction, and to align with disassembly addresses.
+                adj = 0
+                if self.opcode.prev not in PREFIXES:
+                    adj = self.prefix_ct
+
+                self.put(
+                    self.instr_ss.prev,
+                    self.cycle_sample.cur,
+                    self.out_ann,
+                    [Annot.CsIp, ["[{:04X}:{:04X}]".format(cs, self.ip - adj)]],
+                )
+            except:
+                self.debug_annot("repair fail")
         else:
+            # Executing interrupt.
+            self.emu.interrupt(self.iv, self.instr_reads)
+            self.adjust_ip.update(True)
             self.put(
                 self.instr_ss.prev,
                 self.cycle_sample.cur,
@@ -651,10 +733,15 @@ class Decoder(srd.Decoder):
                 [Annot.Mm, ["INT:{:02X}".format(self.iv)]],
             )
 
-        self.inta = 0
         self.reset_instruction()
 
     def reset_instruction(self):
+        self.ip = None
+        self.inta = 0
+
+        if self.opcode.cur not in PREFIXES:
+            self.prefix_ct = 0
+
         self.instr.clear()
         self.instr_reads.clear()
         self.instr_writes.clear()
@@ -704,7 +791,8 @@ class Decoder(srd.Decoder):
             if self.al_ss.prev is not None:
 
                 # Decode entire address bus and save sample 
-                self.al_annotation.update('%05X' % reduce_bus(pins[Addr.AD0:Addr.A19+1]))
+                self.al = reduce_bus(pins[Addr.AD0:Addr.A19+1])
+                self.al_annotation.update('%05X' % self.al)
 
                 # Output address latch annotation
                 self.put(
@@ -714,14 +802,22 @@ class Decoder(srd.Decoder):
                     [Annot.AddrLatch, [self.al_annotation.prev]]
                 )
 
+                seg_str = "-"
+                seg = self.seg_status.cur
+                cs = self.emu.cs()
+                if seg == Segment.CS and cs is not None:
+                    seg_str = "{}:{:04X}".format(SEG_STATES[seg], cs)
+                elif seg is not None:
+                    seg_str = SEG_STATES[seg]
+
                 # Output segment status annotation
-                if self.seg_status.prev is not None and self.seg_valid():
-                    #self.debug_annot(SEG_STATES[self.seg_status.prev])
+                if seg is not None and self.seg_valid():
+                    #self.debug_annot(SEG_STATES[seg])
                     self.put(
                         self.al_ss.prev, 
                         self.samplenum, 
                         self.out_ann, 
-                        [SEG_ANNOTS[self.seg_status.prev], [SEG_STATES[self.seg_status.prev]]]
+                        [SEG_ANNOTS[seg], [seg_str]]
                     )
                 self.have_seg = False
 
@@ -731,10 +827,19 @@ class Decoder(srd.Decoder):
 
     def fetch(self):
         self.cycle_annot(Annot.F, '%02X' % self.data_bus)
+
+        ip = None
         try:
-            self.queue_push(self.data_bus)
-        except:
-            self.error_annot('q_err_of')
+            #self.debug_annot("calc {}:{}".format(self.al, self.emu.cs()))
+            ip = self.calc_ip(self.al, self.emu.cs())
+        except Exception as e:
+            self.error_annot('err_ip: {}'.format(e))
+            return
+
+        try:
+            self.queue_push(ip, self.data_bus)
+        except Exception as e:
+            self.error_annot('q_err_of: {}'.format(e))
 
         self.display_queue()
 
@@ -754,6 +859,7 @@ class Decoder(srd.Decoder):
 
             if self.data_valid:
                 self.decode_data(pins)
+
                 if self.bus_status_latch.cur == BusStatus.CODE:
                     # This was a code fetch. Process it.
                     self.fetch()
@@ -761,6 +867,9 @@ class Decoder(srd.Decoder):
                 # Save the IV during INTA cycles.
                 if self.bus_status_latch.cur == BusStatus.INTA and self.inta == 2:
                     self.iv = self.data_bus
+                elif self.bus_status_latch.cur == BusStatus.MEMR:
+                    # Store reads performed by the current instruction or interrupt.
+                    self.instr_reads.append(self.data_bus)
 
                 self.data_valid = False
 
@@ -768,3 +877,4 @@ class Decoder(srd.Decoder):
             self.advance_t_state(pins)
             self.set_address_latch(pins)
             self.save_pins(pins)
+
