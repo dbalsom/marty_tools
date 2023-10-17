@@ -7,6 +7,8 @@ and includes a few frames of the effect itself at CS:400.
 The .SR file is a sigrok pulseview file and the .PVS file is the default settings. 
 Additional .PVS files may be used to load markers for points of interest.
 
+![image](https://github.com/dbalsom/marty_tools/assets/7229541/68fb27dd-b1fa-45a7-9e7f-7a3ba1158250)
+
 To effectively use these captures you will need to install my i8088 decoder for PulseView, found 
 here:  https://github.com/dbalsom/marty_tools/tree/main/sigrok_decoders
 
