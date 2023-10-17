@@ -1,5 +1,7 @@
 # Area5150 Lake Effect
 
+![image](https://github.com/dbalsom/marty_tools/assets/7229541/8b9b8dcd-55d1-4e5b-a185-db90c0b14888)
+
 This is a (4.77Mhz * 2) logic dump of the Lake effect from Area5150, downsampled from a 50Mhz source capture.
 It includes execution from a little ways into the loader routine, through CREDITS.COM CS:100 
 and includes a few frames of the effect itself at CS:400.
@@ -36,4 +38,4 @@ Legend:
  - Red dots are INTR leading edges.
  - Bright green dots are Timer 0 updates.
  - Yellow lines are hardware interrupts; they extend from INTA bus cycle to first code fetch of ISR.
- - Magenta dots are CRTC register writess
+ - Magenta dots are CRTC register writes.
