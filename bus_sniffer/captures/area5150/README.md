@@ -26,3 +26,14 @@ No signals are used from the i8288, ALE can be calculated via bus status changes
 The images in this directory were created from csv_to_img.py and Photoshop. They reflect a visualization of the ISR setup portion of the effect atop a CGA video stream for synchronization.
 
 ![area5150_lake_timing_diagram_sreads_01](https://github.com/dbalsom/marty_tools/assets/7229541/bcf3b412-3428-4b97-a012-e5967b002487)
+
+Legend:
+ - Green background is BORDER. Dark green is DEN active.
+ - Blue area on right is HBLANK.
+ - Black gaps between green areas are VBLANK.
+ - Gray areas are HBLANK + VBLANK.
+ - Pale white dots are 3DA CGA status register reads.
+ - Red dots are INTR leading edges.
+ - Bright green dots are Timer 0 updates.
+ - Yellow lines are hardware interrupts; they extend from INTA bus cycle to first code fetch of ISR.
+ - Magenta dots are CRTC register writess
