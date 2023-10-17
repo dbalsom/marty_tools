@@ -161,7 +161,6 @@ cython_debug/
 /bus_sniffer/testing
 /bus_sniffer/util_scripts/draw_svg.py
 /bus_sniffer/util_scripts/decode_marty.py
-bus_sniffer/util_scripts/README.md
 /bus_sniffer/util_scripts/pv_test.py
 /bus_sniffer/captures/area5150/area5150_lake_effect_01.csv
 /bus_sniffer/captures/area5150/area5150_lake_5s_wDEN_110920.dsl
