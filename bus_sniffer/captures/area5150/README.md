@@ -1,6 +1,6 @@
-* Area5150 Lake Effect
+# Area5150 Lake Effect
 
-This is a (4.77Mhz * 2) capture of the Lake effect from Area5150. (The end credits effect)
+This is a (4.77Mhz * 2) logic dump of the Lake effect from Area5150, downsampled from a 50Mhz source capture.
 It includes execution from a little ways into the loader routine, through CREDITS.COM CS:100 
 and includes a few frames of the effect itself at CS:400.
 
@@ -23,3 +23,4 @@ No signals are used from the i8288, ALE can be calculated via bus status changes
 
 The images in this directory were created from csv_to_img.py and Photoshop. They reflect a visualization of the ISR setup portion of the effect atop a CGA video stream for synchronization.
 
+![area5150_lake_timing_diagram_sreads_01](https://github.com/dbalsom/marty_tools/assets/7229541/bcf3b412-3428-4b97-a012-e5967b002487)
