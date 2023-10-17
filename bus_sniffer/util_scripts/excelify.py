@@ -33,9 +33,10 @@ import json
 from openpyxl import Workbook
 from openpyxl.styles import Border, Side, PatternFill, Font, NamedStyle
 from openpyxl.utils import get_column_letter
+from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.axis import NumericAxis
 
 from collections import deque
-
 
 PASTEL_PINK = 'FFD1DC'      # Pastel Pink
 PASTEL_ORANGE = 'FFC3A0'    # Pastel Orange
@@ -56,7 +57,19 @@ SANDY_BROWN = 'F4A460'      # Sandy Brown
 LIGHT_GRAY = 'D3D3D3'  # Light Gray
 NORMAL_BLUE = '0000FF'
 
+
 FILL_COLORS = ["ADD8E6", "FFB6C1", "FFDAB9", "E0FFFF", "FFF0F5", "D8BFD8", "FAEBD7"]
+CHART_COLORS = [
+    "FF0000",  # Red
+    "FFA500",  # Orange
+    "FFFF00",  # Yellow
+    "008000",  # Green
+    "0000FF",  # Blue
+    "4B0082",  # Indigo
+    "800080",  # Purple
+    "EE82EE"   # Violet
+]
+
 COLOR_MAP = {
     'SEG': {
         #'CS': LIGHT_BLUE,
@@ -372,7 +385,7 @@ def convert_columns_to_text(wb, col_headers):
             if cell.value is not None:
                 cell.value = str(cell.value).replace("'", "")
 
-def adjust_column_widths(wb, ignore_cols, padding=2):
+def adjust_column_widths(ws, ignore_cols, padding=2):
     """
     Iterate through columns in the worksheet and set the column width based on the
     length of the longest string in each column.
@@ -380,8 +393,6 @@ def adjust_column_widths(wb, ignore_cols, padding=2):
     :param ws: The worksheet object.
     :param padding: An optional padding to add to the column width.
     """
-
-    ws = wb.active
 
     min_width = 1
 
@@ -440,6 +451,9 @@ def keep_only_columns(wb, headers_to_keep):
     :param workbook: The loaded workbook object.
     :param headers_to_keep: A list of header names to be kept.
     """
+
+    print("Dropping columns...")
+    
     ws = wb.active  # assuming we are working on the active sheet
     header_row = [cell.value for cell in ws[1]]  # assuming headers are in the first row
 
@@ -589,14 +603,196 @@ def add_io_sheet(wb):
     # Set the auto_filter to include all data in the IO sheet.
     io_sheet.auto_filter.ref = io_sheet.dimensions
 
+def add_frames_sheet(wb):
+    print("Adding Frame index...")
+
+    main_sheet = wb.active
+
+    # Create 'Frames' sheet if not exist
+    if 'Frames' in wb.sheetnames:
+        frame_sheet = wb['Frames']
+    else:
+        frame_sheet = wb.create_sheet(title='Frames')
+
+    # Adding headers
+    frame_sheet['A1'] = 'FRAME'
+    frame_sheet['B1'] = 'LINES'
+    frame_sheet['C1'] = 'LINK'
+
+    # Initialize row_num for Frames sheet
+    row_num = 2
+
+    hyperlink = NamedStyle(name="hyperlink", font=Font(color="0563C1", underline="single"))
+
+    # Resolve the column headers to column numbers
+    vs_col, vy_col = None, None
+    for i, col in enumerate(main_sheet.iter_cols(1, main_sheet.max_column)):
+        if col[0].value == 'VS':
+            vs_col = i + 1
+        elif col[0].value == 'R_Y':
+            vy_col = i + 1
+
+    if not vs_col or not vy_col:
+        raise Exception("Required columns not found in the main sheet")
+
+    frame_count = 0
+    prev_vs_value = None
+
+    # Iterate through cells in 'VS' column in the main sheet starting from row 2
+    for row in main_sheet.iter_rows(min_row=2, min_col=vs_col, max_col=vs_col, max_row=main_sheet.max_row):
+        for cell in row:
+            if prev_vs_value == 1 and cell.value == 0:  # If transition from 1 to 0
+                vy_value = main_sheet.cell(row=cell.row, column=vy_col).value  # V_Y value in the same row
+                
+                frame_sheet[f'A{row_num}'] = frame_count
+                frame_sheet[f'B{row_num}'] = vy_value
+                
+                link = f"#{main_sheet.title}!A{cell.row}"
+                frame_sheet[f'C{row_num}'].hyperlink = link
+                frame_sheet[f'C{row_num}'].style = hyperlink
+
+                frame_count += 1
+                row_num += 1
+                
+            prev_vs_value = cell.value
+
+    # Set the auto_filter to include all data in the Frames sheet.
+    frame_sheet.auto_filter.ref = frame_sheet.dimensions
+
+def add_charts_sheet(wb):
+    print("Adding Charts...")
+
+    main_sheet = wb.active
+
+    # Create 'Charts' sheet if not exist
+    if 'Charts' in wb.sheetnames:
+        charts_sheet = wb['Charts']
+    else:
+        charts_sheet = wb.create_sheet(title='Charts')
+
+    # Resolve the column headers to column numbers
+    intr_col, hs_col, vs_col = None, None, None
+    for i, col in enumerate(main_sheet.iter_cols(1, main_sheet.max_column)):
+        if col[0].value == 'INTR':
+            intr_col = i + 1
+        elif col[0].value == 'HS':
+            hs_col = i + 1
+        elif col[0].value == 'VS':
+            vs_col = i + 1
+
+    if not intr_col or not hs_col or not vs_col:
+        raise Exception("Required columns not found in the main sheet")
+
+    # Create a LineChart object
+    chart1 = LineChart()
+
+    chart1.y_axis.scaling.min = 0
+    chart1.y_axis.scaling.max = 1
+
+    # Select data for the chart
+    data_intr = Reference(main_sheet, min_col=intr_col, min_row=1, max_row=main_sheet.max_row)
+    data_hs = Reference(main_sheet, min_col=hs_col, min_row=1, max_row=main_sheet.max_row)
+    data_vs = Reference(main_sheet, min_col=vs_col, min_row=1, max_row=main_sheet.max_row)
+    
+    # Add data to chart
+    chart1.add_data(data_intr, titles_from_data=True)
+    chart1.add_data(data_hs, titles_from_data=True)
+    chart1.add_data(data_vs, titles_from_data=True)
+
+    # Add the chart to the Charts sheet
+    charts_sheet.add_chart(chart1, "A1")
+
+def add_charts_sheet2(wb, column_headers, colors):
+
+    chart_height = 3.5
+    chart_width = 50
+    vert_spacing = 6
+
+    print("Adding Charts...")
+
+    main_sheet = wb.active
+
+    # Create 'Charts' sheet if not exist
+    if 'Charts' in wb.sheetnames:
+        charts_sheet = wb['Charts']
+    else:
+        charts_sheet = wb.create_sheet(title='Charts')
+
+    # Get column numbers for the specified headers
+    cols = {}
+    for i, col in enumerate(main_sheet.iter_cols(1, main_sheet.max_column)):
+        if col[0].value in column_headers:
+            cols[col[0].value] = i + 1
+
+    if not cols:
+        raise Exception("None of the specified columns were found in the main sheet")
+
+    # Create a chart for each column and add it to the 'Charts' sheet
+    for i, (header, col_num) in enumerate(cols.items()):
+        # Create a LineChart object
+        chart = LineChart()
+        chart.title = None
+        chart.legend.position = 'r'
+        chart.y_axis.scaling.min = 0
+        chart.y_axis.scaling.max = 1
+        chart.height = chart_height
+        chart.width = chart_width
+
+
+        # Select data for the chart
+        data = Reference(main_sheet, min_col=col_num, min_row=1, max_row=main_sheet.max_row)
+        
+        # Add data to chart
+        chart.add_data(data, titles_from_data=True)
+        #chart.title = header
+
+        s1 = chart.series[0]
+        s1.graphicalProperties.line.solidFill = colors[i % len(colors)]
+        s1.graphicalProperties.line.width = 1
+
+        # Add the chart to the Charts sheet
+        charts_sheet.add_chart(chart, f"A{1 + vert_spacing*i}")  # Adjust the cell reference as needed
+
+def convert_columns_to_int(sheet, headers):
+    """
+    Convert the contents of specified columns in a worksheet to integers.
+
+    :param sheet: The worksheet.
+    :param headers: A list of column headers to convert.
+    """
+    
+    int_style = NamedStyle(number_format='0')  # Define a number format style for 0 decimal places
+
+    # First, find the column numbers for the specified headers
+    header_cols = {}
+    for i, col in enumerate(sheet.iter_cols(1, sheet.max_column), 1):
+        if col[0].value in headers:
+            header_cols[col[0].value] = i
+
+    # Now, go through each specified column and convert each cell to an integer
+    for header, col_num in header_cols.items():
+        print(f"Converting column {header} to int...")
+        for row in sheet.iter_rows(min_row=2, min_col=col_num, max_col=col_num, max_row=sheet.max_row):
+            for cell in row:
+                #print(f"Processing cell: {cell.coordinate}")
+                try:
+                    cell.number_format = '0'  # Apply the number format directly to the cell
+                    cell.value = int(cell.value)
+                    
+                    #print(f"Successfully converted cell {cell.coordinate}, value: {cell.value} to integer.")
+                except (ValueError, TypeError):
+                    print(f"Error converting cell {cell.coordinate}, value: {cell.value} to integer. Keeping original value.")
+
+                
 def main():
 
-    clk_columns = ["READY", "CLK0", "INTR", "DR0", "VS", "HS"]
+    clk_columns = ["READY", "CLK0", "INTR", "DR0", "VS", "HS", "DEN"]
     text_columns = ["AL", "INSTF", "D", "QB", "Q0", "Q1", "Q2", "Q3", "ADDR"]
     keep_columns = [
+        'Time(s)',
         'N', 'ALE', 'AL', 'SEG', 'BUSL', 'READY', 'READY1', 'READY2', 'T', 'D', 'QOP', 'QB', 'INSTF', 'DISASM', 
         'QL', 'Q0', 'Q1', 'Q2', 'Q3',
-        'CLK0', 'CLK01', 'CLK02', 'INTR', 'INTR1', 'INTR2', 'DR0', 'DR01', 'DR02', 'VS', 'VS1', 'VS2', 'HS', 'HS1', 'HS2',
+        'CLK0', 'CLK01', 'CLK02', 'INTR', 'INTR1', 'INTR2', 'DR0', 'DR01', 'DR02', 'VS', 'VS1', 'VS2', 'HS', 'HS1', 'HS2', 'DEN', 'DEN1', 'DEN2',
         "FRAME", "R_X", "R_Y"
     ]
     
@@ -615,7 +811,11 @@ def main():
     
     keep_only_columns(wb, keep_columns)
     draw_clocks(wb, clk_columns)
-    adjust_column_widths(wb, clk_columns, padding=4)
+
+    adjust_column_widths(wb.active, clk_columns, padding=4) 
+    for sheet in wb.worksheets[1:]:
+        adjust_column_widths(wb.active, [], padding=4) 
+
     add_instruction_borders(wb, instructions)
     
     convert_columns_to_text(wb, text_columns)
@@ -626,6 +826,11 @@ def main():
 
     add_instructions_sheet(wb)
     add_io_sheet(wb)
+    #add_frames_sheet(wb)
+
+    convert_columns_to_int(wb.active, ['READY', 'INTR', 'DR0', 'VS', 'HS', 'DEN'])
+    #add_charts_sheet(wb)
+    #add_charts_sheet2(wb, ['READY', 'INTR', 'DR0', 'VS', 'HS'], CHART_COLORS)
 
     print("\nSaving xlsx...")
     wb.save(output_xlsx)

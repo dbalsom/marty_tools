@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Python: Current File",
             "type": "python",
@@ -12,6 +13,30 @@
             "console": "integratedTerminal",
             "justMyCode": true
         },
+        {
+            "name": "Python: decode_marty",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "T:\\sniffer_dump\\martypc_sigrok_11.csv",
+                "T:\\sniffer_dump\\martypc_sigrok_11_decoded_02.csv",
+            ],               
+        },      
+        {
+            "name": "Python: decode_marty test",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "T:\\sniffer_dump\\marty_debug_test_01.csv",
+                "T:\\sniffer_dump\\marty_debug_test_decoded_01.csv",
+            ],               
+        },               
         {
             "name": "Python: Decode Bus Sniff Log",
             "type": "python",
@@ -24,6 +49,20 @@
             "console": "integratedTerminal",
             "justMyCode": true,
 
-        }        
+        },
+        {
+            "name": "Python: Create SVG",
+            "type": "python",
+            "request": "launch",
+            "program": "bus_sniffer\\draw_svg.py",
+            "args": [
+                "T:\\sniffer_dump\\area5150_lake_5s_cycles_trimmed_decoded_02.csv",
+                "READY",
+                "T:\\sniffer_dump\\out_svg_01.csv",
+            ],            
+            "console": "integratedTerminal",
+            "justMyCode": true,
+
+        }    
     ]
 }

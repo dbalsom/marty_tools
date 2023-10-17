@@ -49,7 +49,9 @@ def dump_rows(n, time_offset, source_file, destination_file):
     reader = pd.read_csv(source_file, sep=',', comment=';', chunksize=CHUNK_SIZE)
 
     first_chunk = True
+    dump_size = n
     rows_to_write = n
+
     for chunk in reader:
         chunk_count += 1
         rows_processed += len(chunk)

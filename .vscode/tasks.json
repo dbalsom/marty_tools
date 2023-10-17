@@ -2,7 +2,26 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "copyPythonFilesToSigrokCli",
+            "label": "Install All Decoders",
+            "type": "shell",
+            "command": "echo",
+            "args": [
+                "installing decoders..."
+            ],
+            "dependsOn": [ 
+                "copy8088DecoderToSigrokCli", 
+                "copy8088DecoderToPulseView",
+                "copy6845DecoderToSigrokCli",
+                "copy6845DecoderToSigrokCli"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },            
+        },
+        {
+            "label": "copy8088DecoderToSigrokCli",
             "type": "shell",
             "command": "cmd",
             "args": [
@@ -18,7 +37,7 @@
             "problemMatcher": [],
             "group": {
                 "kind": "build",
-                "isDefault": true
+                "isDefault": false
             },
             "options": {
                 "shell": {
@@ -27,7 +46,7 @@
             }
         },
         {
-            "label": "copyPythonFilesToPulseView",
+            "label": "copy8088DecoderToPulseView",
             "type": "shell",
             "command": "cmd",
             "args": [
@@ -43,13 +62,63 @@
             "problemMatcher": [],
             "group": {
                 "kind": "build",
-                "isDefault": true
+                "isDefault": false
             },
             "options": {
                 "shell": {
                     "executable": "C:\\Windows\\System32\\cmd.exe"
                 }
             }
-        }        
+        },
+        {
+            "label": "copy6845DecoderToSigrokCli",
+            "type": "shell",
+            "command": "cmd",
+            "args": [
+                "/c",
+                "copy",
+                "\"${workspaceFolder}\\sigrok_decoders\\m6845\\*.py\"",
+                "\"T:\\sigrok-cli\\share\\libsigrokdecode\\decoders\\m6845\\\""
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\cmd.exe"
+                }
+            }
+        },
+        {
+            "label": "copy6845DecoderToPulseView",
+            "type": "shell",
+            "command": "cmd",
+            "args": [
+                "/c",
+                "copy",
+                "\"${workspaceFolder}\\sigrok_decoders\\m6845\\*.py\"",
+                "\"T:\\PulseView\\share\\libsigrokdecode\\decoders\\m6845\\\""
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\cmd.exe"
+                }
+            }
+        }          
     ]
 }
